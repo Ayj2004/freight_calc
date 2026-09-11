@@ -6,6 +6,7 @@ from core.calc import compute_item
 import pandas as pd
 
 st.title("🧮 运费计算器")
+
 df_goods, df_dest, df_rates, df_surcharge = load_all_data()
 surcharge_dict = get_surcharge_dict()
 BUFFER_LIMIT = Decimal(str(st.secrets.get("BUFFER_LIMIT", "500")))
@@ -44,37 +45,43 @@ if rate_info:
     unit_price = Decimal(str(rate_info["unit_price"]))
     pickup_fee = Decimal(str(rate_info["pickup_fee"]))
     st.info(f"""
-    计费单位：**{uom}**｜单价：**{unit_price} 元/{uom}**
-    提送费：**{pickup_fee} 元/票** {"（割草机未另加提送费）" if pickup_fee == 0 else ""}
-    """)
+计费单位：**{uom}**｜单价：**{unit_price} 元/{uom}**
+提送费：**{pickup_fee} 元/票** {"（割草机未另加提送费）" if pickup_fee == 0 else ""}
+""")
 else:
     st.warning("该品类+目的地暂无生效报价规则，填写数量无法计算，请前往【基础数据设置】添加报价规则。")
     uom = None
 
-# 数量输入提示文案
+# ========== 改动在这里：动态输入框标签 ==========
+label_map = {
+    "台": "计费台数",
+    "方": "计费方数",
+    "吨": "计费吨数",
+    "件": "计费件数"
+}
 help_text_map = {
     "台": "填台数，多台按单台报价累乘",
     "方": "填总方数",
     "吨": "填总吨数",
     "件": "填总件数"
 }
+input_label = label_map.get(uom, "计费数量")
 help_text = help_text_map.get(uom, "") if uom else ""
 
 # 表单
 with st.form("calc_form"):
     if uom in ["台"]:
-        qty = st.number_input("计费数量", min_value=0, step=1, format="%d", help=help_text)
+        qty = st.number_input(input_label, min_value=0, step=1, format="%d", help=help_text)
     else:
-        qty = st.number_input("计费数量", min_value=0.0, step=0.001, format="%.3f", help=help_text)
+        qty = st.number_input(input_label, min_value=0.0, step=0.001, format="%.3f", help=help_text)
 
     with st.expander("⚙️ 高级选项（可选）"):
         surcharge_input = st.number_input("附加费（元/票）", min_value=0.0, value=0.0, step=1.0)
         buffer_input = st.number_input("容错金额（元/票）", min_value=0.0, value=0.0, step=1.0,
-                                       help=f"不含容错的价格为运输底价，无降价空间；容错上限配置为 {BUFFER_LIMIT} 元")
+                                      help=f"不含容错的价格为运输底价，无降价空间；容错上限配置为 {BUFFER_LIMIT} 元")
         # P1 超长/异形，注释放开启用
         # length_m = st.number_input("货物长度(米)", min_value=0.0, value=0.0, step=0.1)
         # is_irregular = st.checkbox("是否异形件")
-
     submitted = st.form_submit_button("计算")
 
 # 计算逻辑
@@ -85,10 +92,8 @@ if submitted:
         qty_dec = Decimal(str(qty))
         surcharge_dec = Decimal(str(surcharge_input))
         buffer_dec = Decimal(str(buffer_input))
-
         if buffer_dec > BUFFER_LIMIT:
             st.warning(f"⚠️ 容错金额 {buffer_dec} 超过配置上限 {BUFFER_LIMIT}，可继续计算，请留意报价风险")
-
         base_frt, lowest_frt, total_frt = compute_item(
             quantity=qty_dec,
             unit_price=unit_price,
@@ -96,7 +101,6 @@ if submitted:
             surcharge=surcharge_dec,
             buffer=buffer_dec
         )
-
         # 结果指标卡
         st.divider()
         st.subheader("📊 计算结果")
@@ -107,7 +111,6 @@ if submitted:
             st.metric("容错金额", f"{buffer_dec} 元")
         with c3:
             st.metric("运费合计（对外报价）", f"{total_frt} 元")
-
         # 明细表格
         result_df = pd.DataFrame([{
             "货物品类": goods_name,
@@ -122,11 +125,9 @@ if submitted:
             "运费合计(元)": float(total_frt)
         }])
         st.dataframe(result_df, hide_index=True, use_container_width=True)
-
         # 公式文本
         st.code(f"""基础运费 = {unit_price} 元/{uom} × {qty_dec} {uom} = {base_frt} 元
 最低运费 = {base_frt} + 提送费 {pickup_fee} + 附加费 {surcharge_dec} = {lowest_frt} 元
 运费合计 = {lowest_frt} + 容错 {buffer_dec} = {total_frt} 元""", language="text")
-
         if qty_dec == Decimal("0"):
             st.info("✅ 数量为0，本票按不发货计，不收取提送费")
