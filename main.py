@@ -7,7 +7,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-DOWNLOAD_URL = "https://github.com/Ayj2004/freight_calc/releases/tag/v1"
+DOWNLOAD_URL = "https://github.com/Ayj2004/freight_calc/releases/download/v1/freight_calc_desktop_v1.exe"
 button_html = f'''
 <style>
 div[data-testid="stAppViewContainer"] {{
